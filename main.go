@@ -241,10 +241,10 @@ func uploadIP(ip, name string, domain string, email string, key string) {
 	}
 }
 
-func handleMain(config Config, domainInfo []string) {
+func handleMain(config Config, domainInfo []string, retry bool) {
 	url := fmt.Sprintf("%s.%s", domainInfo[0], domainInfo[1])
 	result := getLatency(url, 10)
-	if result.Latency > 200 {
+	if result.Latency > 200 || retry {
 		if len(resultList) == 0 {
 			resp, err := http.Get("https://zip.baipiao.eu.org")
 			if err != nil {
@@ -352,6 +352,9 @@ func handleMain(config Config, domainInfo []string) {
 							if err != nil {
 								logStr := fmt.Sprintf("访问%s失败: %s", url, err)
 								log.Info(logStr)
+								blockList[string(ip)] = true
+								breakSignal = true
+								retryHandleMain = true
 								return
 							}
 							defer resp.Body.Close()
@@ -384,7 +387,7 @@ func handleMain(config Config, domainInfo []string) {
 				}
 			}
 			if retryHandleMain {
-				handleMain(config, domainInfo)
+				handleMain(config, domainInfo, true)
 			}
 		}
 	} else {
@@ -431,6 +434,6 @@ func main() {
 	}
 
 	for _, domainInfo := range config.DomainInfos {
-		handleMain(config, domainInfo)
+		handleMain(config, domainInfo, false)
 	}
 }
