@@ -102,7 +102,7 @@ func getIP(resultList []LatencyResult) string {
 	for _, item := range resultList {
 		if _, exists := blockList[item.IP]; !exists && item.LossRate <= 0.35 {
 			lossRateStr := fmt.Sprintf("%.2f", item.LossRate)
-			logStr := fmt.Sprintf("所选ip-%s的丢包率为：%s，延时为：%dms", item.IP, lossRateStr, item.Latency)
+			logStr := fmt.Sprintf("所选ip-%s的丢包率为: %s, 延时为: %dms", item.IP, lossRateStr, item.Latency)
 			log.Info(logStr)
 			return item.IP
 		}
@@ -352,7 +352,7 @@ func handleMain(config Config, domainInfo []string, retry bool) {
 							if err != nil {
 								logStr := fmt.Sprintf("访问%s失败: %s", url, err)
 								log.Info(logStr)
-								blockList[string(ip)] = true
+								blockList[ipStr] = true
 								breakSignal = true
 								retryHandleMain = true
 								return
@@ -369,7 +369,7 @@ func handleMain(config Config, domainInfo []string, retry bool) {
 								logStr := fmt.Sprintf("访问%s失败, 程序继续", url)
 								log.Info(logStr)
 								globalIP = ""
-								blockList[string(ip)] = true
+								blockList[ipStr] = true
 								breakSignal = true
 								retryHandleMain = true
 							}
