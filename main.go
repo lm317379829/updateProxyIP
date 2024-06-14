@@ -1,13 +1,11 @@
 package main
 
 import (
-	"archive/zip"
 	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"sort"
@@ -70,12 +68,19 @@ func getLatency(ip string, count int) LatencyResult {
 	}
 }
 
-func getResultList(content string) []LatencyResult {
+func getResultList(content string, blockArea string) []LatencyResult {
 	var wg sync.WaitGroup
 	ipList := strings.Split(strings.Trim(content, "\n"), "\n")
 	resultChan := make(chan LatencyResult, len(ipList))
 
 	for _, ip := range ipList {
+		if strings.Contains(ip, "#") {
+			parts := strings.Split(ip, "#")
+			ip = parts[0]
+			if strings.Contains(parts[1], blockArea) {
+				continue
+			}
+		}
 		wg.Add(1)
 		go func(ip string) {
 			defer wg.Done()
@@ -87,6 +92,9 @@ func getResultList(content string) []LatencyResult {
 	close(resultChan)
 
 	for result := range resultChan {
+		if result.Latency > 999 {
+			continue
+		}
 		resultList = append(resultList, result)
 	}
 	return resultList
@@ -99,7 +107,7 @@ func getIP(resultList []LatencyResult) string {
 	for _, item := range resultList {
 		if _, exists := blockList[item.IP]; !exists && item.LossRate <= 0.35 {
 			lossRateStr := fmt.Sprintf("%.2f", item.LossRate)
-			logStr := fmt.Sprintf("所选ip-%s的丢包率为：%s，延时为：%dms", item.IP, lossRateStr, item.Latency)
+			logStr := fmt.Sprintf("所选ip-%s的丢包率为: %s, 延时为：%dms", item.IP, lossRateStr, item.Latency)
 			log.Info(logStr)
 			return item.IP
 		}
@@ -243,147 +251,35 @@ func handleMain(config Config, domainInfo []string) {
 	result := getLatency(url, 10)
 	if result.Latency > 200 {
 		if len(resultList) == 0 {
-			resp, err := http.Get("https://zip.baipiao.eu.org")
+			resp, err := http.Get("https://ipdb.api.030101.xyz/?type=bestcf&country=true")
 			if err != nil {
-				logStr := fmt.Sprintf("下载ZIP文件错误: %s", err)
+				logStr := fmt.Sprintf("下载优选IP列表错误: %s", err)
 				log.Info(logStr)
 				return
 			}
 			defer resp.Body.Close()
 			buf, err := io.ReadAll(resp.Body)
 			if err != nil {
-				logStr := fmt.Sprintf("读取ZIP文件错误: %s", err)
+				logStr := fmt.Sprintf("读取优选IP列表错误: %s", err)
 				log.Info(logStr)
 				return
 			}
-
-			z, err := zip.NewReader(bytes.NewReader(buf), int64(len(buf)))
-			if err != nil {
-				logStr := fmt.Sprintf("打开ZIP文件错误: %s", err)
-				log.Info(logStr)
-				return
-			}
-
-			for _, file := range z.File {
-				var content []byte
-				fileName := strings.TrimSuffix(file.Name, ".txt")
-				parts := strings.Split(fileName, "-")
+			var content string
+			content = string(buf)
+			if len(content) > 0 {
 				if len(domainInfo) == 3 {
-					newParts := strings.Split(domainInfo[2], "-")
-					if (parts[0] == newParts[0] || newParts[0] == "*") && (parts[1] == newParts[1] || newParts[1] == "*") && (parts[2] == newParts[2] || newParts[2] == "*") {
-						tls = parts[1]
-						port = parts[2]
-						rc, err := file.Open()
-						if err != nil {
-							logStr := fmt.Sprintf("无法打开ZIP中的文件: %s", err)
-							log.Info(logStr)
-							return
-						}
-						content, err = io.ReadAll(rc) // 赋值 content
-						rc.Close()
-						if err != nil {
-							logStr := fmt.Sprintf("无法读取ZIP中的文件: %s", err)
-							log.Info(logStr)
-							return
-						}
-					}
+					resultList = getResultList(string(content), domainInfo[2])
 				} else {
-					tls = parts[1]
-					port = parts[2]
-					rc, err := file.Open()
-					if err != nil {
-						logStr := fmt.Sprintf("无法打开ZIP中的文件: %s", err)
-						log.Info(logStr)
-						return
-					}
-					content, err = io.ReadAll(rc) // 赋值 content
-					rc.Close()
-					if err != nil {
-						logStr := fmt.Sprintf("无法读取ZIP中的文件: %s", err)
-						log.Info(logStr)
-						return
-					}
-				}
-				if len(content) > 0 {
-					resultList = getResultList(string(content))
+					resultList = getResultList(string(content), "")
 				}
 			}
 		}
-
 		if globalIP == "" && len(resultList) > 0 {
 			globalIP = getIP(resultList)
 		}
+
 		if globalIP != "" {
 			uploadIP(globalIP, domainInfo[0], domainInfo[1], config.Email, config.Key)
-			var protocol string
-			if tls == string('0') {
-				protocol = "http"
-			} else {
-				protocol = "https"
-			}
-			url = fmt.Sprintf("%s.%s", domainInfo[0], domainInfo[1])
-
-			ticker := time.NewTicker(5 * time.Second)
-			defer ticker.Stop()
-
-			breakSignal := false
-			retryHandleMain := false
-			maxExecutions := 120
-			for i := 0; i < maxExecutions; i++ {
-				<-ticker.C
-				ips, err := net.LookupIP(url)
-				if err != nil {
-					logStr := fmt.Sprintf("获取 IP 地址失败: %s", err)
-					log.Info(logStr)
-					continue
-				}
-
-				for _, ip := range ips {
-					ipStr := ip.String()
-					log.Info(ipStr)
-					if ipStr == globalIP {
-						client := http.Client{
-							Timeout: 30 * time.Second,
-						}
-						func() {
-							resp, err := client.Get(fmt.Sprintf("%s://%s:%s", protocol, url, port))
-							if err != nil {
-								logStr := fmt.Sprintf("访问%s失败: %s", url, err)
-								log.Info(logStr)
-								return
-							}
-							defer resp.Body.Close()
-
-							statusCode := resp.StatusCode
-							if statusCode >= 200 && statusCode < 300 {
-								logStr := fmt.Sprintf("访问%s正常, 更新完成", url)
-								log.Info(logStr)
-								breakSignal = true
-								return
-							} else {
-								logStr := fmt.Sprintf("访问%s失败, 程序继续", url)
-								log.Info(logStr)
-								globalIP = ""
-								blockList[string(ip)] = true
-								breakSignal = true
-								retryHandleMain = true
-							}
-						}()
-					} else {
-						logStr := fmt.Sprintf("域名%s的IP为%s, 暂未更新, 等待5s后重试", url, ipStr)
-						log.Info(logStr)
-					}
-					if breakSignal {
-						break
-					}
-				}
-				if breakSignal {
-					break
-				}
-			}
-			if retryHandleMain {
-				handleMain(config, domainInfo)
-			}
 		}
 	} else {
 		logStr := fmt.Sprintf("域名%s的ip延时为%dms小于200ms，未更新", url, result.Latency)
