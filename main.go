@@ -26,6 +26,12 @@ var globalIP string
 var resultList []LatencyResult
 var blockList = make(map[string]bool)
 
+type DomainInfo struct {
+	Subdomain string   `json:"subdomain"`
+	Domain    string   `json:"domain"`
+	Ports     []string `json:"ports"`
+}
+
 type Config struct {
 	Email       string     `json:"email"`
 	Key         string     `json:"key"`
@@ -261,9 +267,10 @@ func handleMain(config Config, domainInfo []string) {
 			for _, file := range z.File {
 				var content []byte
 				fileName := strings.TrimSuffix(file.Name, ".txt")
+				parts := strings.Split(fileName, "-")
 				if len(domainInfo) == 3 {
-					if strings.Contains(fileName, domainInfo[2]) {
-						parts := strings.Split(fileName, "-")
+					newParts := strings.Split(domainInfo[2], "-")
+					if (parts[0] == newParts[0] || newParts[0] == "*") && (parts[1] == newParts[1] || newParts[1] == "*") && (parts[2] == newParts[2] || newParts[2] == "*") {
 						tls = parts[1]
 						port = parts[2]
 						rc, err := file.Open()
@@ -281,7 +288,6 @@ func handleMain(config Config, domainInfo []string) {
 						}
 					}
 				} else {
-					parts := strings.Split(fileName, "-")
 					tls = parts[1]
 					port = parts[2]
 					rc, err := file.Open()
