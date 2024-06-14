@@ -1,10 +1,10 @@
 # updateProxyIP
 
-自动从 https://zip.baipiao.eu.org 获取中转IP，取ping值最低的ip绑定域名。
+自动从 [https://zip.baipiao.eu.org](https://zip.baipiao.eu.org) 获取中转IP，取ping值最低的ip绑定域名。
 
-## 使用方法
+# 使用方法
 
-配置config.json
+### 配置config.json
 
 {"email": "账户email", "key": "账户key", "domainInfos":[["名称", "根域", "目标文件名关键字"], ["名称", "根域"]]}
 
@@ -18,4 +18,10 @@
 
 \*为任意匹配，\*-1-443 表示：任意线路，支持tls，443端口，123-*-8080 表示：123线路，是否tls支持均可，8080端口
 
-具体文件名参考 https://zip.baipiao.eu.org
+具体文件名参考 [https://zip.baipiao.eu.org](https://zip.baipiao.eu.org)
+
+### 运行程序
+
+./updateProxyIP -file config.json文件所在位置
+
+若config.json与程序同目录，可直接 ./updateProxyIP 运行程序
