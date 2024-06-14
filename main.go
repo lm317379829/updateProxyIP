@@ -343,7 +343,6 @@ func handleMain(config Config, domainInfo []string) {
 
 				for _, ip := range ips {
 					ipStr := ip.String()
-					log.Info(ipStr)
 					if ipStr == globalIP {
 						client := http.Client{
 							Timeout: 30 * time.Second,
