@@ -1,0 +1,86 @@
+name: build updateProxyIP
+
+on:
+  repository_dispatch:
+  workflow_dispatch:
+    inputs:
+      ssh:
+        description: 'SSH Connection to Actions'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        platform: [ubuntu-latest]
+        go-version: [ '1.21' ]
+    name: Build
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: benjlevesque/short-sha@v2.2
+        id: short-sha
+          
+      - name: SSH Connection to Actions
+        uses: P3TERX/ssh2actions@v1.0.0
+        if: (github.event.inputs.ssh == 'true' && github.event.inputs.ssh  != 'false') || contains(github.event.action, 'ssh')
+          
+      - name: Build Go
+        run: |
+          set +e
+          GOOS=linux GOARCH=386 CGO_ENABLED=0 go build -ldflags "-s -w" -tags netgo -installsuffix netgo -o updateProxyIP-linux-386
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-s -w" -tags netgo -installsuffix netgo -o updateProxyIP-linux-amd64
+          GOOS=linux GOARCH=arm CGO_ENABLED=0 go build -ldflags "-s -w" -tags netgo -installsuffix netgo -o updateProxyIP-linux-arm
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "-s -w" -tags netgo -installsuffix netgo -o updateProxyIP-linux-arm64
+          GOOS=linux GOARCH=mips CGO_ENABLED=0 go build -ldflags "-s -w" -tags netgo -installsuffix netgo -o updateProxyIP-linux-mips
+          GOOS=linux GOARCH=mips64 CGO_ENABLED=0 go build -ldflags "-s -w" -tags netgo -installsuffix netgo -o updateProxyIP-linux-mips64
+          GOOS=linux GOARCH=mipsle CGO_ENABLED=0 go build -ldflags "-s -w" -tags netgo -installsuffix netgo -o updateProxyIP-linux-mipsle
+          GOOS=linux GOARCH=mips64le CGO_ENABLED=0 go build -ldflags "-s -w" -tags netgo -installsuffix netgo -o updateProxyIP-linux-mips64le
+          GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-s -w" -tags netgo -installsuffix netgo -o updateProxyIP-darwin-amd64
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "-s -w" -tags netgo -installsuffix netgo -o updateProxyIP-darwin-arm64
+          GOOS=windows GOARCH=386 CGO_ENABLED=0 go build -ldflags "-s -w" -tags netgo -installsuffix netgo -o updateProxyIP-windows-386.exe
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-s -w" -tags netgo -installsuffix netgo -o updateProxyIP-windows-amd64.exe
+          GOOS=freebsd GOARCH=386 CGO_ENABLED=0 go build -ldflags "-s -w" -tags netgo -installsuffix netgo -o updateProxyIP-freebsd-386
+          GOOS=freebsd GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-s -w" -tags netgo -installsuffix netgo -o updateProxyIP-freebsd-amd64
+          echo "FILESNAME=$PWD" >> $GITHUB_ENV
+  
+      - name: Bump Version and Push Tag
+        id: bump
+        uses: anothrNick/github-tag-action@v1 # Don't use @master or @v1 unless you're happy to test the latest version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # if you don't want to set write permissions use a PAT token
+          WITH_V: false
+
+      - name: Upload Go to Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.bump.outputs.new_tag }}
+          files: ${{ env.FILESNAME }}/updateProxyIP-*
+
+      - name: Delete Workflow Runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          retain_days: 1
+          keep_minimum_runs: 3
+
+      - name: Remove Old Releases
+        uses: dev-drprasad/delete-older-releases@v0.1.0
+        with:
+          keep_latest: 3
+          delete_tags: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
