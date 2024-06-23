@@ -341,8 +341,8 @@ func handleMain(config Config, domainInfo []string, retry bool) {
 					continue
 				}
 
-				for _, ip := range ips {
-					ipStr := ip.String()
+				for _, newIP := range ips {
+					ipStr := newIP.String()
 					if ipStr == globalIP {
 						client := http.Client{
 							Timeout: 30 * time.Second,
@@ -352,6 +352,7 @@ func handleMain(config Config, domainInfo []string, retry bool) {
 							if err != nil {
 								logStr := fmt.Sprintf("访问%s失败: %s", url, err)
 								log.Info(logStr)
+								globalIP = ""
 								blockList[ipStr] = true
 								breakSignal = true
 								retryHandleMain = true
@@ -391,7 +392,7 @@ func handleMain(config Config, domainInfo []string, retry bool) {
 			}
 		}
 	} else {
-		logStr := fmt.Sprintf("域名%s的ip延时为%dms小于200ms，未更新", url, result.Latency)
+		logStr := fmt.Sprintf("域名%s的ip延时为%dms小于200ms, 未更新", url, result.Latency)
 		log.Info(logStr)
 	}
 
