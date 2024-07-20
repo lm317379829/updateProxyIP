@@ -193,7 +193,7 @@ func uploadIP(ip, name string, domain string, email string, key string) {
 		for _, record := range resultList {
 			if record.(map[string]interface{})["type"].(string) == "A" {
 				rid = record.(map[string]interface{})["id"].(string)
-				proxiable = record.(map[string]interface{})["proxiable"].(bool)
+				proxied = record.(map[string]interface{})["proxied"].(bool)
 				break
 			}
 		}
@@ -203,7 +203,7 @@ func uploadIP(ip, name string, domain string, email string, key string) {
 			"type":      "A",
 			"name":      fmt.Sprintf("%s.%s", name, domain),
 			"content":   ip,
-			"proxiable": proxiable,
+			"proxied": proxied,
 		}
 		if rid == "" {
 			continue
